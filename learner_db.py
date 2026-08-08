@@ -19,11 +19,41 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
-# Override with LEARNER_DB=... if you want a throwaway database for a demo.
-DB_PATH = os.getenv("LEARNER_DB", os.path.join(os.path.dirname(os.path.abspath(__file__)), "learner.db"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+
+def _default_db_path() -> str:
+    """Keep the database beside the source, unless that directory is read-only.
+
+    Locally the source directory is writable and this returns learner.db right
+    where you would expect it. On a serverless host (Vercel, Lambda) the deployed
+    code is mounted read-only, so `CREATE TABLE` fails with "unable to open
+    database file" and every request 500s. There we fall back to the system temp
+    directory, which is the only writable path such hosts provide.
+
+    That fallback keeps the app *serving*, but temp storage is wiped between
+    invocations: profiles and plans will not survive. It is a way to get a demo
+    up, not a substitute for a real database - point LEARNER_DB at durable
+    storage, or move to a hosted DB, before anyone relies on the data.
+    """
+    if os.access(_HERE, os.W_OK):
+        return os.path.join(_HERE, "learner.db")
+
+    fallback = os.path.join(tempfile.gettempdir(), "learner.db")
+    print(
+        f"[learner_db] {_HERE} is read-only - falling back to {fallback}. "
+        f"This storage is EPHEMERAL; set LEARNER_DB to keep data.",
+        flush=True,
+    )
+    return fallback
+
+
+# Override with LEARNER_DB=... to point at a throwaway or a durable database.
+DB_PATH = os.getenv("LEARNER_DB") or _default_db_path()
 
 
 def _now() -> str:
