@@ -1,0 +1,8 @@
+.env
+
+# SQLite data is regenerated on demand - learner.db, and eval_learner.db from eval.py
+*.db
+__pycache__/
+*.pyc
+.venv/
+venv/

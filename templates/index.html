@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LevelShift · Learning Path Agent</title>
+<meta name="description" content="AI-powered personalised learning path builder."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"/>
+
+<style>
+/* ================================================================
+   DESIGN TOKENS
+================================================================ */
+:root {
+  --bg-page   : #070b18;
+  --bg-panel  : #0e1525;
+  --bg-card   : #131c30;
+  --bg-input  : #0e1525;
+  --border    : rgba(100,116,255,.16);
+  --border-a  : rgba(100,116,255,.40);
+  --accent    : #6474ff;
+  --accent-lt : #8b9bff;
+  --cyan      : #22d3ee;
+  --pink      : #f472b6;
+  --green     : #34d399;
+  --amber     : #fbbf24;
+  --t1 : #f0f4ff;
+  --t2 : #8892b0;
+  --t3 : #4a5578;
+  --r  : 14px;
+  --r2 : 20px;
+  --ease: .2s cubic-bezier(.4,0,.2,1);
+  --shadow: 0 8px 32px rgba(0,0,0,.45);
+}
+
+/* ================================================================
+   RESET
+================================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg-page);
+  color: var(--t1);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ================================================================
+   ANIMATED BACKGROUND
+================================================================ */
+.bg-orbs {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+}
+.orb {
+  position: absolute; border-radius: 50%;
+  filter: blur(80px); opacity: .55;
+}
+.orb-1 {
+  width: 700px; height: 700px;
+  background: radial-gradient(circle, rgba(100,116,255,.3), transparent 70%);
+  top: -20%; left: -15%;
+  animation: orb1 16s ease-in-out infinite alternate;
+}
+.orb-2 {
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(34,211,238,.2), transparent 70%);
+  bottom: -20%; right: -10%;
+  animation: orb2 20s ease-in-out infinite alternate;
+}
+.orb-3 {
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(244,114,182,.15), transparent 70%);
+  top: 40%; left: 45%;
+  animation: orb3 24s ease-in-out infinite alternate;
+}
+@keyframes orb1 { to { transform: translate(60px, 80px); } }
+@keyframes orb2 { to { transform: translate(-70px, -60px); } }
+@keyframes orb3 { to { transform: translate(-40px, 60px) scale(1.2); } }
+
+/* ================================================================
+   APP SHELL  (full-height, 3 columns)
+================================================================ */
+.shell {
+  position: relative; z-index: 1;
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  height: 100vh;
+}
+
+/* ================================================================
+   TOP NAV
+================================================================ */
+.nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px;
+  background: rgba(7,11,24,.85);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+  grid-column: 1/-1;
+}
+.nav-logo { display: flex; align-items: center; gap: 10px; }
+.nav-logo-icon {
+  width: 32px; height: 32px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 0 16px rgba(100,116,255,.6);
+  animation: logoglow 3s ease-in-out infinite;
+}
+@keyframes logoglow {
+  0%,100% { box-shadow: 0 0 16px rgba(100,116,255,.5); }
+  50%      { box-shadow: 0 0 28px rgba(100,116,255,.9), 0 0 48px rgba(34,211,238,.3); }
+}
+.nav-brand {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700; font-size: 16px;
+  background: linear-gradient(90deg, var(--accent-lt), var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.nav-pill {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 14px;
+  background: rgba(100,116,255,.08);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px; color: var(--accent-lt); font-weight: 500;
+}
+.pulse-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:.4; transform:scale(.7); } }
+
+/* ================================================================
+   CONTENT AREA  (2 columns: chat | resizer | dashboard)
+   --dash-w is set by the drag handler in JS (default 480px)
+================================================================ */
+.content {
+  display: flex;          /* flex instead of grid so we can use flex-grow on chat */
+  overflow: hidden;
+  --dash-w: 480px;        /* JS updates this live while dragging */
+}
+
+/* ── LEFT — CHAT COLUMN ── */
+.chat-col {
+  flex: 1;                /* takes all remaining space */
+  min-width: 280px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-page);
+  border-right: none;     /* border replaced by resizer */
+}
+
+/* ── DRAG RESIZER ── */
+.resizer {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  position: relative;
+  transition: background var(--ease);
+  z-index: 10;
+}
+.resizer::before {
+  content: '';
+  position: absolute;
+  inset: 0 -4px;           /* wider invisible grab area */
+}
+.resizer:hover,
+.resizer.dragging {
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(100,116,255,.6);
+}
+/* dotted handle in the middle */
+.resizer::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 3px; height: 32px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.2);
+}
+.resizer:hover::after, .resizer.dragging::after {
+  background: rgba(255,255,255,.55);
+}
+
+/* ── RIGHT — DASHBOARD COLUMN ── */
+
+/* ── ONBOARDING SCREEN ── */
+.onboard {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px 32px;
+  gap: 36px;
+  animation: fadeUp .5s ease both;
+}
+
+.ob-hero { text-align: center; }
+.ob-emoji {
+  font-size: 60px; display: block; margin-bottom: 20px;
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
+
+.ob-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 34px; font-weight: 700; line-height: 1.2;
+  background: linear-gradient(135deg, #f0f4ff 30%, var(--accent-lt) 60%, var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+.dash-col {
+  width: var(--dash-w);   /* controlled by drag */
+  min-width: 300px;
+  max-width: 70vw;
+  flex-shrink: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg-panel);
+}
+
+/* ── ONBOARDING SCREEN ── */
+.onboard {
+  flex: 1;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 40px 32px;
+  gap: 36px;
+  animation: fadeUp .5s ease both;
+}
+
+.ob-hero { text-align: center; }
+.ob-emoji {
+  font-size: 60px; display: block; margin-bottom: 20px;
+  animation: float 4s ease-in-out infinite;
+}
+@keyframes float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
+
+.ob-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 34px; font-weight: 700; line-height: 1.2;
+  background: linear-gradient(135deg, #f0f4ff 30%, var(--accent-lt) 60%, var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+.ob-sub {
+  font-size: 14px; color: var(--t2);
+  max-width: 380px; line-height: 1.7; margin: 0 auto;
+}
+
+/* email card */
+.email-card {
+  width: 100%; max-width: 400px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: 28px;
+  display: flex; flex-direction: column; gap: 16px;
+  box-shadow: var(--shadow);
+}
+.email-card label {
+  font-size: 12px; font-weight: 600;
+  color: var(--t2); letter-spacing: .07em; text-transform: uppercase;
+}
+.input-row {
+  display: flex; gap: 10px;
+}
+.email-input {
+  flex: 1; padding: 13px 16px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r);
+  color: var(--t1); font-size: 14px; font-family: inherit;
+  outline: none;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+.email-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(100,116,255,.18);
+}
+.email-input::placeholder { color: var(--t3); }
+
+.btn-go {
+  padding: 13px 22px;
+  background: linear-gradient(135deg, var(--accent), #4338ca);
+  border: none; border-radius: var(--r);
+  color: #fff; font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; white-space: nowrap;
+  transition: transform var(--ease), box-shadow var(--ease), filter var(--ease);
+}
+.btn-go:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(100,116,255,.5);
+  filter: brightness(1.1);
+}
+.btn-go:active { transform: none; }
+.btn-go:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.err-msg {
+  font-size: 13px; color: #fc8181;
+  padding: 10px 14px;
+  background: rgba(252,129,129,.08);
+  border: 1px solid rgba(252,129,129,.25);
+  border-radius: 10px;
+  animation: shake .35s ease;
+}
+@keyframes shake { 0%,100% {transform:translateX(0)} 30% {transform:translateX(-6px)} 70% {transform:translateX(6px)} }
+
+/* feature pills */
+.features {
+  display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;
+  max-width: 400px;
+}
+.feat-pill {
+  padding: 6px 14px;
+  background: rgba(100,116,255,.07);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 12px; color: var(--t2); font-weight: 500;
+  display: flex; align-items: center; gap: 5px;
+}
+
+/* ── CHAT SCREEN ── */
+.chat-screen {
+  display: flex; flex-direction: column; flex: 1; overflow: hidden;
+}
+
+.chat-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(14,21,37,.7);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+}
+.agent-avatar {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.topbar-info { flex: 1; min-width: 0; }
+.topbar-name  { font-weight: 600; font-size: 14px; }
+.topbar-email { font-size: 11px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-pill {
+  padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  white-space: nowrap;
+}
+.track-pill.ok { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.25); }
+.track-pill.no { background: rgba(251,191,36,.1);  color: var(--amber); border: 1px solid rgba(251,191,36,.25); }
+
+/* messages */
+.messages {
+  flex: 1; overflow-y: auto;
+  padding: 24px 20px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.messages::-webkit-scrollbar { width: 4px; }
+.messages::-webkit-scrollbar-thumb { background: rgba(100,116,255,.25); border-radius: 99px; }
+
+.msg { display: flex; gap: 10px; animation: msgPop .3s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes msgPop { from { opacity:0; transform:translateY(12px) scale(.97); } }
+.msg-agent { align-self: flex-start; }
+.msg-user  { align-self: flex-end; flex-direction: row-reverse; }
+
+.msg-av {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.msg-agent .msg-av { background: linear-gradient(135deg, var(--accent), var(--cyan)); }
+.msg-user  .msg-av { background: var(--bg-card); border: 1px solid var(--border); }
+
+.msg-bubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  font-size: 13.5px; line-height: 1.65;
+  border-radius: 16px;
+}
+.msg-agent .msg-bubble {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  color: var(--t1);
+}
+.msg-user .msg-bubble {
+  background: linear-gradient(135deg, var(--accent), #4338ca);
+  border-radius: 16px 4px 16px 16px;
+  color: #fff;
+}
+
+/* typing */
+.typing-row { display: flex; gap: 10px; align-self: flex-start; animation: msgPop .3s ease both; }
+.typing-bbl {
+  background: var(--bg-panel); border: 1px solid var(--border);
+  border-radius: 4px 16px 16px 16px;
+  padding: 14px 16px; display: flex; gap: 5px; align-items: center;
+}
+.t-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-lt); }
+.t-dot:nth-child(1) { animation: td 1.2s 0s   infinite; }
+.t-dot:nth-child(2) { animation: td 1.2s .2s  infinite; }
+.t-dot:nth-child(3) { animation: td 1.2s .4s  infinite; }
+@keyframes td { 0%,60%,100%{transform:translateY(0);opacity:.4} 30%{transform:translateY(-7px);opacity:1} }
+
+/* input */
+.input-bar {
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+  background: rgba(14,21,37,.8);
+  backdrop-filter: blur(12px);
+  flex-shrink: 0;
+}
+.input-row-chat { display: flex; gap: 10px; align-items: flex-end; }
+.chat-ta {
+  flex: 1; padding: 12px 16px;
+  background: var(--bg-card); border: 1.5px solid var(--border);
+  border-radius: var(--r); color: var(--t1); font-size: 13.5px;
+  font-family: inherit; resize: none; outline: none; max-height: 120px;
+  line-height: 1.5;
+  transition: border-color var(--ease), box-shadow var(--ease);
+}
+.chat-ta:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(100,116,255,.15); }
+.chat-ta::placeholder { color: var(--t3); }
+.send-btn {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--accent), #4338ca);
+  border: none; color: #fff; font-size: 16px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform var(--ease), box-shadow var(--ease);
+}
+.send-btn:hover { transform: scale(1.1); box-shadow: 0 6px 20px rgba(100,116,255,.5); }
+.send-btn:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+.input-hint { margin-top: 7px; font-size: 11px; color: var(--t3); text-align: center; }
+
+/* ================================================================
+   RIGHT — DASHBOARD COLUMN
+================================================================ */
+.dash-col {
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  background: var(--bg-panel);
+}
+.dash-col::-webkit-scrollbar { width: 4px; }
+.dash-col::-webkit-scrollbar-thumb { background: rgba(100,116,255,.2); border-radius: 99px; }
+
+/* section */
+.d-section { padding: 20px; border-bottom: 1px solid var(--border); }
+.d-section:last-child { border-bottom: none; }
+.d-title {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--t3);
+  margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.d-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* empty */
+.d-empty {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding: 16px 0; color: var(--t3); font-size: 12px; text-align: center;
+}
+.d-empty-icon { font-size: 26px; opacity: .3; }
+
+/* profile grid */
+.prof-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.prof-item {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 10px 12px;
+  transition: border-color var(--ease);
+}
+.prof-item:hover { border-color: var(--border-a); }
+.prof-key { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--t3); margin-bottom: 3px; }
+.prof-val { font-size: 13px; font-weight: 500; color: var(--t1); }
+
+/* progress card */
+.prog-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--r2); padding: 16px;
+}
+.prog-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-bottom: 12px;
+}
+.prog-label { font-size: 12px; color: var(--t2); }
+.prog-pct {
+  font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-lt), var(--cyan));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.prog-track {
+  height: 8px; background: rgba(100,116,255,.1);
+  border-radius: 99px; overflow: hidden; margin-bottom: 10px;
+}
+.prog-fill {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  transition: width 1s cubic-bezier(.34,1.56,.64,1);
+  position: relative; overflow: hidden;
+}
+.prog-fill::after {
+  content:''; position:absolute; inset:0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent);
+  animation: shim 2.4s ease-in-out infinite;
+}
+@keyframes shim { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
+.prog-footer { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--t3); }
+
+/* stat row */
+.stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.stat-box {
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 10px 12px; text-align: center;
+}
+.stat-num { font-family:'Space Grotesk',sans-serif; font-size: 20px; font-weight: 700; color: var(--accent-lt); display:block; }
+.stat-lbl { font-size: 10px; color: var(--t3); font-weight: 500; }
+
+/* skill gaps */
+.gap-wrap { display:flex; flex-wrap:wrap; gap:7px; }
+.gap-tag {
+  padding: 5px 11px;
+  background: rgba(244,114,182,.07); border: 1px solid rgba(244,114,182,.2);
+  border-radius: 99px; font-size: 11.5px; color: var(--pink); font-weight: 500;
+  animation: tagIn .4s ease both;
+}
+@keyframes tagIn { from{opacity:0;transform:scale(.8)} to{opacity:1;transform:scale(1)} }
+
+/* ── WEEK VIEWER (single-card navigator) ─────────────────── */
+
+/* nav bar: Prev | Week X of N | Next */
+.wv-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.wv-btn {
+  display: flex; align-items: center; gap: 5px;
+  padding: 6px 14px;
+  background: rgba(100,116,255,.1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--accent-lt);
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  cursor: pointer;
+  transition: background var(--ease), border-color var(--ease), transform var(--ease);
+  white-space: nowrap;
+}
+.wv-btn:hover:not(:disabled) {
+  background: rgba(100,116,255,.22);
+  border-color: var(--border-a);
+  transform: translateY(-1px);
+}
+.wv-btn:disabled { opacity: .3; cursor: not-allowed; transform: none; }
+
+.wv-counter {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 13px; font-weight: 600;
+  color: var(--t2);
+  text-align: center; white-space: nowrap;
+}
+.wv-counter strong { color: var(--t1); }
+
+/* progress dots */
+.wv-dots {
+  display: flex; gap: 5px; justify-content: center;
+  margin-bottom: 12px; flex-wrap: wrap;
+}
+.wv-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border-a);
+  transition: background var(--ease), transform var(--ease);
+  cursor: pointer;
+}
+.wv-dot.active {
+  background: var(--accent);
+  transform: scale(1.4);
+}
+.wv-dot:hover { background: var(--accent-lt); }
+
+/* the card itself */
+.wv-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  overflow: hidden;
+  animation: wvIn .3s cubic-bezier(.34,1.4,.64,1) both;
+}
+@keyframes wvIn { from { opacity:0; transform:translateX(24px) scale(.97); } }
+@keyframes wvInBack { from { opacity:0; transform:translateX(-24px) scale(.97); } }
+.wv-card.going-back { animation-name: wvInBack; }
+
+/* card header */
+.wv-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(100,116,255,.05);
+}
+.wv-badge {
+  flex-shrink: 0;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px; font-weight: 700; color: #fff;
+  box-shadow: 0 0 16px rgba(100,116,255,.4);
+}
+.wv-head-info { flex: 1; min-width: 0; }
+.wv-focus {
+  font-size: 14px; font-weight: 600; color: var(--t1);
+  line-height: 1.35; margin-bottom: 6px;
+}
+.wv-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.wv-tag {
+  padding: 3px 9px; border-radius: 6px;
+  font-size: 10px; font-weight: 600;
+  background: rgba(34,211,238,.1); color: var(--cyan);
+  border: 1px solid rgba(34,211,238,.2);
+}
+
+/* card body */
+.wv-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* section label inside body */
+.wv-section-lbl {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase;
+  color: var(--t3); margin-bottom: 2px;
+}
+
+/* each course */
+.wv-course {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(100,116,255,.06);
+  border-left: 3px solid var(--accent);
+}
+.wv-course-title {
+  font-size: 13px; font-weight: 600; color: var(--t1);
+  line-height: 1.3;
+}
+.wv-course-meta { font-size: 11px; color: var(--t3); }
+.wv-course-link {
+  font-size: 11px; color: var(--accent-lt);
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 2px;
+}
+.wv-course-link:hover { color: var(--cyan); }
+
+/* assignment */
+.wv-assign {
+  display: flex; gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(34,211,238,.05);
+  border-left: 3px solid var(--cyan);
+}
+.wv-assign-icon { font-size: 14px; flex-shrink: 0; line-height: 1.5; }
+.wv-assign-text { font-size: 12px; color: var(--t2); line-height: 1.6; }
+
+/* completions */
+.comp-list { display: flex; flex-direction: column; gap: 6px; }
+.comp-row  { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--t2); }
+.comp-dot  { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.comp-date { font-size: 10px; color: var(--t3); margin-left: auto; white-space: nowrap; }
+
+/* ================================================================
+   TOAST
+================================================================ */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  background: var(--bg-card); border: 1px solid rgba(100,116,255,.35);
+  border-radius: 16px; padding: 14px 18px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.5);
+  animation: toastIn .45s cubic-bezier(.34,1.56,.64,1) both;
+  max-width: 280px;
+}
+@keyframes toastIn { from { opacity:0; transform:translateY(16px) scale(.92); } }
+.toast.out { animation: toastOut .3s ease both; }
+@keyframes toastOut { to { opacity:0; transform:translateY(8px) scale(.95); } }
+.toast-icon { font-size: 22px; }
+.toast-body { font-size: 13px; }
+.toast-body strong { display:block; margin-bottom:2px; font-weight:600; }
+.toast-body span   { font-size: 11px; color: var(--t2); }
+
+/* ================================================================
+   PARTICLES
+================================================================ */
+#particles { position:fixed; inset:0; pointer-events:none; z-index:50; }
+.par { position:absolute; border-radius:50%; animation: pFly 1s ease-out both; }
+@keyframes pFly { to { transform:translate(var(--tx),var(--ty)) scale(0); opacity:0; } }
+
+/* ================================================================
+   UTILITIES
+================================================================ */
+.hidden { display: none !important; }
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<div id="particles"></div>
+
+<div class="shell">
+
+  {# ══ NAV ══ #}
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-logo-icon">🚀</div>
+      <div>
+        <div class="nav-brand">LevelShift</div>
+      </div>
+    </div>
+    <div class="nav-pill">
+      <span class="pulse-dot"></span>
+      AI Learning Agent
+    </div>
+  </nav>
+
+  {# ══ CONTENT ══ #}
+  <div class="content">
+
+    {# ── CHAT COLUMN ── #}
+    <div class="chat-col">
+
+      {# onboarding #}
+      <div class="onboard" id="onboard">
+        <div class="ob-hero">
+          <span class="ob-emoji">🎯</span>
+          <h1 class="ob-title">Your AI Learning<br/>Path Agent</h1>
+          <p class="ob-sub">Tell me your goals. I'll build a personalised, week-by-week learning journey — powered by real courses.</p>
+        </div>
+
+        <div class="email-card">
+          <label for="emailIn">Enter your email to begin</label>
+          <div class="input-row">
+            <input type="email" id="emailIn" class="email-input"
+              placeholder="you@company.com" autocomplete="email" autofocus/>
+            <button class="btn-go" id="goBtn" onclick="startSession()">Start →</button>
+          </div>
+          <div id="emailErr" class="err-msg hidden"></div>
+        </div>
+
+        <div class="features">
+          <span class="feat-pill">🧠 Skill gap analysis</span>
+          <span class="feat-pill">📅 Week-by-week plan</span>
+          <span class="feat-pill">📈 Progress tracking</span>
+          <span class="feat-pill">🔄 Replanning</span>
+        </div>
+      </div>
+
+      {# active chat #}
+      <div class="chat-screen hidden" id="chatScreen">
+
+        <div class="chat-topbar">
+          <div class="agent-avatar">🤖</div>
+          <div class="topbar-info">
+            <div class="topbar-name" id="topName">Learning Agent</div>
+            <div class="topbar-email" id="topEmail"></div>
+          </div>
+          <span class="track-pill hidden" id="trackPill"></span>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="input-bar">
+          <div class="input-row-chat">
+            <textarea class="chat-ta" id="chatTa" rows="1"
+              placeholder="Type a message… (Enter to send, Shift+Enter for new line)"></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMsg()" title="Send">➤</button>
+          </div>
+          <div class="input-hint">Plan and progress save automatically after every reply.</div>
+        </div>
+
+      </div>
+
+    </div>{# /chat-col #}
+
+    {# ── DRAG RESIZER ── #}
+    <div class="resizer" id="resizer" title="Drag to resize panels"></div>
+
+    {# ── DASHBOARD COLUMN ── #}
+    <div class="dash-col" id="dashCol">
+
+      {# Profile #}
+      <div class="d-section">
+        <div class="d-title">Profile</div>
+        <div id="profBox">
+          <div class="d-empty">
+            <span class="d-empty-icon">👤</span>
+            <span>Your profile will appear here as we chat.</span>
+          </div>
+        </div>
+      </div>
+
+      {# Progress #}
+      <div class="d-section">
+        <div class="d-title">Progress</div>
+        <div id="progBox">
+          <div class="d-empty">
+            <span class="d-empty-icon">📊</span>
+            <span>Progress shows once your plan is ready.</span>
+          </div>
+        </div>
+      </div>
+
+      {# Skill Gaps #}
+      <div class="d-section hidden" id="gapSection">
+        <div class="d-title">Skill Gaps</div>
+        <div class="gap-wrap" id="gapBox"></div>
+      </div>
+
+      {# Weekly Plan Viewer #}
+      <div class="d-section hidden" id="planSection">
+        <div class="d-title">Weekly Plan</div>
+        {# nav row #}
+        <div class="wv-nav">
+          <button class="wv-btn" id="wvPrev" onclick="wvGo(-1)">&#8592; Prev</button>
+          <span class="wv-counter" id="wvCounter">Week <strong>1</strong> of 1</span>
+          <button class="wv-btn" id="wvNext" onclick="wvGo(1)">Next &#8594;</button>
+        </div>
+        {# progress dots #}
+        <div class="wv-dots" id="wvDots"></div>
+        {# single week card #}
+        <div id="wvCard"></div>
+      </div>
+
+      {# Completions #}
+      <div class="d-section hidden" id="compSection">
+        <div class="d-title">Completions</div>
+        <div class="comp-list" id="compBox"></div>
+      </div>
+
+    </div>{# /dash-col #}
+
+  </div>{# /content #}
+</div>{# /shell #}
+
+<script>
+/* ================================================================
+   STATE
+================================================================ */
+const S = { eid: null, name: null, busy: false };
+
+/* ================================================================
+   DOM HELPERS
+================================================================ */
+const $ = id => document.getElementById(id);
+const esc = t => String(t)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/\n/g,'<br/>');
+
+function scrollDown() {
+  const m = $('messages');
+  requestAnimationFrame(() => m.scrollTo({ top: m.scrollHeight, behavior: 'smooth' }));
+}
+
+/* ================================================================
+   MESSAGES
+================================================================ */
+function addMsg(text, role) {
+  const d = document.createElement('div');
+  d.className = `msg msg-${role === 'agent' ? 'agent' : 'user'}`;
+  d.innerHTML = `
+    <div class="msg-av">${role === 'agent' ? '🤖' : '👤'}</div>
+    <div class="msg-bubble">${esc(text)}</div>`;
+  $('messages').appendChild(d);
+  scrollDown();
+}
+
+function showTyping() {
+  rmTyping();
+  const d = document.createElement('div');
+  d.className = 'typing-row'; d.id = 'typing';
+  d.innerHTML = `
+    <div class="msg-av" style="background:linear-gradient(135deg,#6474ff,#22d3ee)">🤖</div>
+    <div class="typing-bbl">
+      <div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div>
+    </div>`;
+  $('messages').appendChild(d);
+  scrollDown();
+}
+function rmTyping() { const t = $('typing'); if (t) t.remove(); }
+
+function setEnabled(on) {
+  $('chatTa').disabled  = !on;
+  $('sendBtn').disabled = !on;
+  S.busy = !on;
+}
+
+/* ================================================================
+   PARTICLES
+================================================================ */
+function burst(x, y) {
+  const colors = ['#6474ff','#22d3ee','#f472b6','#34d399','#fbbf24'];
+  for (let i = 0; i < 16; i++) {
+    const p = document.createElement('div');
+    p.className = 'par';
+    const s = 4 + Math.random() * 7;
+    const a = (Math.PI * 2 * i) / 16;
+    const r = 70 + Math.random() * 90;
+    p.style.cssText = `
+      width:${s}px; height:${s}px; left:${x}px; top:${y}px;
+      background:${colors[i % colors.length]};
+      --tx:${Math.cos(a)*r}px; --ty:${Math.sin(a)*r}px;
+      animation-delay:${Math.random()*.15}s;
+      animation-duration:${.7+Math.random()*.5}s;`;
+    $('particles').appendChild(p);
+    setTimeout(() => p.remove(), 1400);
+  }
+}
+
+/* ================================================================
+   TOAST
+================================================================ */
+function toast(msg, sub = '', icon = '🎉') {
+  document.querySelector('.toast')?.remove();
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `
+    <span class="toast-icon">${icon}</span>
+    <div class="toast-body"><strong>${msg}</strong><span>${sub}</span></div>`;
+  document.body.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 400); }, 4200);
+}
+
+/* ================================================================
+   DASHBOARD RENDERERS
+================================================================ */
+function renderProfile(p) {
+  const rows = [
+    ['Name',          p.name],
+    ['Current Role',  p.current_role],
+    ['Experience',    p.experience_years ? `${p.experience_years} yrs` : null],
+    ['Target Role',   p.target_role],
+    ['Hours / Week',  p.hours_per_week   ? `${p.hours_per_week}h`      : null],
+    ['Timeline',      p.timeline_months  ? `${p.timeline_months} mo`   : null],
+  ].filter(r => r[1]);
+  if (!rows.length) return;
+  $('profBox').innerHTML = `<div class="prof-grid">${
+    rows.map(r => `
+      <div class="prof-item">
+        <div class="prof-key">${r[0]}</div>
+        <div class="prof-val">${esc(String(r[1]))}</div>
+      </div>`).join('')
+  }</div>`;
+}
+
+function renderProgress(prog, rep) {
+  if (!prog?.courses_in_plan) return;
+  const pct = +( prog.percent_complete || 0);
+  const onT = rep?.on_track;
+  $('progBox').innerHTML = `
+    <div class="prog-card">
+      <div class="prog-top">
+        <span class="prog-label">Overall Completion</span>
+        <span class="prog-pct">${pct}%</span>
+      </div>
+      <div class="prog-track">
+        <div class="prog-fill" id="pFill" style="width:0%"></div>
+      </div>
+      <div class="prog-footer">
+        <span>${prog.completed_in_plan || 0} of ${prog.courses_in_plan} courses done</span>
+        ${onT != null ? `<span class="track-pill ${onT?'ok':'no'}">${onT ? '✓ On track' : '⚠ Behind'}</span>` : ''}
+      </div>
+      <div class="stat-row">
+        <div class="stat-box">
+          <span class="stat-num">${rep?.weeks_elapsed  || 0}</span>
+          <span class="stat-lbl">Weeks Done</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-num">${rep?.weeks_remaining || 0}</span>
+          <span class="stat-lbl">Weeks Left</span>
+        </div>
+      </div>
+    </div>`;
+  // animate bar
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const f = $('pFill'); if (f) f.style.width = `${pct}%`;
+  }));
+  // update topbar pill
+  if (onT != null) {
+    const pill = $('trackPill');
+    pill.className = `track-pill ${onT ? 'ok' : 'no'}`;
+    pill.textContent = onT ? '✓ On Track' : '⚠ Behind';
+    pill.classList.remove('hidden');
+  }
+}
+
+function renderGaps(gaps) {
+  if (!gaps?.length) return;
+  $('gapSection').classList.remove('hidden');
+  $('gapBox').innerHTML = gaps.map((g, i) =>
+    `<span class="gap-tag" style="animation-delay:${i*.04}s">${esc(g)}</span>`
+  ).join('');
+}
+
+/* ================================================================
+   WEEK VIEWER STATE
+================================================================ */
+let wvWeeks = [];   // full weeks array from plan
+let wvIdx   = 0;   // current index (0-based)
+
+function renderPlan(plan) {
+  if (!plan?.weekly_plan?.length) return;
+  wvWeeks = plan.weekly_plan;
+  wvIdx   = 0;
+  $('planSection').classList.remove('hidden');
+  buildWvDots();
+  renderWvCard(false);
+}
+
+function buildWvDots() {
+  const n = wvWeeks.length;
+  $('wvDots').innerHTML = wvWeeks.map((_, i) =>
+    `<div class="wv-dot${i===0?' active':''}" onclick="wvJump(${i})" title="Week ${i+1}"></div>`
+  ).join('');
+}
+
+function wvGo(dir) {
+  const next = wvIdx + dir;
+  if (next < 0 || next >= wvWeeks.length) return;
+  const goingBack = dir < 0;
+  wvIdx = next;
+  renderWvCard(goingBack);
+}
+
+function wvJump(idx) {
+  if (idx === wvIdx) return;
+  const goingBack = idx < wvIdx;
+  wvIdx = idx;
+  renderWvCard(goingBack);
+}
+
+function renderWvCard(goingBack = false) {
+  const w   = wvWeeks[wvIdx];
+  const tot = wvWeeks.length;
+
+  // update nav
+  $('wvPrev').disabled = (wvIdx === 0);
+  $('wvNext').disabled = (wvIdx === tot - 1);
+  $('wvCounter').innerHTML = `Week <strong>${wvIdx + 1}</strong> of ${tot}`;
+
+  // update dots
+  document.querySelectorAll('.wv-dot').forEach((d, i) =>
+    d.classList.toggle('active', i === wvIdx)
+  );
+
+  // build courses HTML
+  const courses = (w.courses || []).map(c => {
+    const meta = [c.provider, c.level, c.duration_hours ? c.duration_hours + 'h' : ''].filter(Boolean).join(' · ');
+    return `
+      <div class="wv-course">
+        <div class="wv-course-title">${esc(c.title || c.id)}</div>
+        ${meta ? `<div class="wv-course-meta">${meta}</div>` : ''}
+        ${c.course_link
+          ? `<a class="wv-course-link" href="${c.course_link}" target="_blank" rel="noopener">&#128279; View course</a>`
+          : ''}
+      </div>`;
+  }).join('');
+
+  const assignHtml = w.assignment
+    ? `<div class="wv-assign">
+         <span class="wv-assign-icon">&#128203;</span>
+         <span class="wv-assign-text">${esc(w.assignment)}</span>
+       </div>`
+    : '';
+
+  const card = document.createElement('div');
+  card.className = `wv-card${goingBack ? ' going-back' : ''}`;
+  card.innerHTML = `
+    <div class="wv-head">
+      <div class="wv-badge">${w.week}</div>
+      <div class="wv-head-info">
+        <div class="wv-focus">${esc(w.focus || '')}</div>
+        <div class="wv-tags">
+          <span class="wv-tag">${w.hours}h this week</span>
+          ${w.courses?.length ? `<span class="wv-tag">${w.courses.length} course${w.courses.length>1?'s':''}</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="wv-body">
+      ${courses
+        ? `<div class="wv-section-lbl">Courses</div>${courses}`
+        : '<span style="font-size:12px;color:var(--t3);font-style:italic">Project / revision week</span>'}
+      ${assignHtml
+        ? `<div class="wv-section-lbl" style="margin-top:4px">Assignment</div>${assignHtml}`
+        : ''}
+    </div>`;
+
+  // swap card with animation
+  const box = $('wvCard');
+  box.innerHTML = '';
+  box.appendChild(card);
+}
+
+function toggleWk(n) { $('wk'+n)?.classList.toggle('open'); }
+
+function renderCompletions(hist) {
+  if (!hist?.length) return;
+  $('compSection').classList.remove('hidden');
+  $('compBox').innerHTML = [...hist].reverse().map(e => `
+    <div class="comp-row">
+      <span class="comp-dot"></span>
+      <span>${esc(e.course_id)}</span>
+      <span class="comp-date">${(e.completed_at||'').slice(0,10)}</span>
+    </div>`).join('');
+}
+
+async function refreshDash(data) {
+  if (data.progress) {
+    const prog = data.progress.progress || data.progress;
+    renderProgress(prog, data.progress);
+    if (data.progress.completion_history) renderCompletions(data.progress.completion_history);
+  }
+  if (data.plan) { renderGaps(data.plan.skill_gaps); renderPlan(data.plan); }
+  // also pull live profile
+  try {
+    const r = await fetch(`/api/progress?employee_id=${encodeURIComponent(S.eid)}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    renderProfile({ name: S.name, current_role: d.current_role,
+      experience_years: d.experience_years, target_role: d.target_role,
+      hours_per_week: d.hours_per_week, timeline_months: d.timeline_months });
+    if (d.progress) renderProgress(d.progress, d);
+    if (d.completion_history) renderCompletions(d.completion_history);
+  } catch (_) {}
+}
+
+/* ================================================================
+   SESSION START
+================================================================ */
+function showErr(msg) {
+  const e = $('emailErr');
+  e.textContent = msg; e.classList.remove('hidden');
+  setTimeout(() => e.classList.add('hidden'), 6000);
+}
+
+async function startSession() {
+  const email = $('emailIn').value.trim();
+  if (!email) { showErr('Please enter your email address.'); return; }
+
+  const btn = $('goBtn');
+  btn.disabled = true; btn.textContent = 'Connecting…';
+
+  try {
+    const res = await fetch('/api/session/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const d = await res.json();
+
+    if (!res.ok) {
+      showErr(d.error || 'Something went wrong.');
+      btn.disabled = false; btn.textContent = 'Start →';
+      return;
+    }
+
+    // particles
+    const r = btn.getBoundingClientRect();
+    burst(r.left + r.width/2, r.top + r.height/2);
+
+    S.eid  = d.employee_id;
+    S.name = d.known_name || null;
+
+    // switch to chat instantly
+    $('onboard').classList.add('hidden');
+    $('chatScreen').classList.remove('hidden');
+    $('topEmail').textContent = email;
+    $('topName').textContent  = S.name ? `Hi, ${S.name} 👋` : 'Learning Agent';
+
+    if (d.has_plan) {
+      addMsg(d.message || "Welcome back! Here's your plan.", 'agent');
+      await refreshDash(d);
+      toast('Plan loaded', 'Check the dashboard →', '📋');
+      addMsg("Tell me how you're getting on, or what you'd like to change.", 'agent');
+      setEnabled(true);
+    } else {
+      showTyping(); setEnabled(false);
+      loadOpening(S.eid);
+    }
+
+    $('chatTa').focus();
+
+  } catch (err) {
+    showErr('Network error — is the server running?');
+    btn.disabled = false; btn.textContent = 'Start →';
+    console.error(err);
+  }
+}
+
+async function loadOpening(eid) {
+  try {
+    const res = await fetch('/api/chat/open', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_id: eid }),
+    });
+    const d = await res.json();
+    rmTyping();
+    addMsg(d.agent_message || "Hi! Tell me your name, current role, experience, target goal, and hours per week.", 'agent');
+  } catch (err) {
+    rmTyping();
+    addMsg("Hi! I'm your Learning Path Agent. Tell me your name, current role, experience, what you're aiming for, and hours per week.", 'agent');
+    console.error(err);
+  } finally {
+    setEnabled(true); $('chatTa').focus();
+  }
+}
+
+/* ================================================================
+   SEND MESSAGE
+================================================================ */
+async function sendMsg() {
+  if (S.busy) return;
+  const ta = $('chatTa');
+  const text = ta.value.trim();
+  if (!text) return;
+
+  addMsg(text, 'user');
+  ta.value = ''; ta.style.height = '';
+  setEnabled(false); showTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_id: S.eid, message: text }),
+    });
+    const d = await res.json();
+    rmTyping();
+
+    if (!res.ok) { addMsg('⚠️ ' + (d.error || 'Error — please try again.'), 'agent'); setEnabled(true); return; }
+
+    if (d.agent_message) addMsg(d.agent_message, 'agent');
+    await refreshDash(d);
+    if (d.kind === 'plan') toast('Your plan is ready!', 'See the dashboard →', '🎉');
+
+  } catch (err) {
+    rmTyping();
+    addMsg('⚠️ Network error. Please try again.', 'agent');
+    console.error(err);
+  } finally {
+    setEnabled(true); $('chatTa').focus();
+  }
+}
+
+/* ================================================================
+   KEYBOARD
+================================================================ */
+$('chatTa').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+});
+$('chatTa').addEventListener('input', function () {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+});
+$('emailIn').addEventListener('keydown', e => { if (e.key === 'Enter') startSession(); });
+
+/* ================================================================
+   DRAG-RESIZE PANEL DIVIDER
+================================================================ */
+(function () {
+  const STORAGE_KEY = 'ls_dash_w';
+  const MIN = 300, MAX = Math.round(window.innerWidth * 0.70);
+  const content  = document.querySelector('.content');
+  const dashCol  = $('dashCol');
+  const resizer  = $('resizer');
+
+  // restore saved width
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) setDashW(parseInt(saved, 10));
+
+  function setDashW(w) {
+    const clamped = Math.max(MIN, Math.min(MAX, w));
+    content.style.setProperty('--dash-w', clamped + 'px');
+    dashCol.style.width = clamped + 'px';
+    localStorage.setItem(STORAGE_KEY, clamped);
+  }
+
+  let dragging = false, startX = 0, startW = 0;
+
+  resizer.addEventListener('mousedown', e => {
+    dragging = true;
+    startX = e.clientX;
+    startW = dashCol.offsetWidth;
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    // moving mouse LEFT = dashboard gets wider (we drag from LEFT of dashboard)
+    const delta = startX - e.clientX;
+    setDashW(startW + delta);
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  // keyboard nudge: '[' shrinks dashboard, ']' grows dashboard
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if (e.key === '[') setDashW(dashCol.offsetWidth - 40);
+    if (e.key === ']') setDashW(dashCol.offsetWidth + 40);
+  });
+
+  // recalculate max on resize
+  window.addEventListener('resize', () => {
+    setDashW(dashCol.offsetWidth); // re-clamp
+  });
+})();
+</script>
+</body>
+</html>
