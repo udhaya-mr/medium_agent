@@ -51,7 +51,7 @@ from openai import AzureOpenAI
 
 import learner_db
 import tools
-from azure_client import build_client, extract_json
+from azure_client import build_client, call_with_retry, extract_json
 
 MAX_TURNS = 12          # hard stop so a confused model cannot loop forever
 MAX_OUTPUT_TOKENS = 8000  # a 26-week plan is a lot of JSON; reasoning models need headroom
@@ -539,14 +539,14 @@ def call_model(client: AzureOpenAI, deployment: str, messages: list[dict]):
         max_completion_tokens=MAX_OUTPUT_TOKENS,
     )
     try:
-        return client.chat.completions.create(**kwargs)
+        return call_with_retry(lambda: client.chat.completions.create(**kwargs))
     except Exception as exc:
         # Older, non-reasoning deployments reject max_completion_tokens and want
         # max_tokens instead. Retry once with the legacy parameter name.
         if "max_completion_tokens" in str(exc):
             kwargs.pop("max_completion_tokens")
             kwargs["max_tokens"] = MAX_OUTPUT_TOKENS
-            return client.chat.completions.create(**kwargs)
+            return call_with_retry(lambda: client.chat.completions.create(**kwargs))
         raise
 
 

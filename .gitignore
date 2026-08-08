@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Last-known-good DNS answers - machine specific, regenerated on first call
+.dns_cache.json
